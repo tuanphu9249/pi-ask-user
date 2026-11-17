@@ -2682,6 +2682,8 @@ interface CustomPromptRequest<T> {
    timeout?: number;
    displayMode: AskDisplayMode;
    overlayToggle: ResolvedShortcut;
+   /** One-line text Pi reports as the program status message (OSC 7501) while the prompt waits. */
+   blockedMessage: string;
    createComponent: (
       tui: TUI,
       theme: Theme,
@@ -2690,6 +2692,14 @@ interface CustomPromptRequest<T> {
    ) => Component;
    /** RPC/headless mode: ctx.ui.custom() returns undefined, so degrade to the select()/input() dialogs. */
    fallback: () => Promise<T | null>;
+}
+
+const BLOCKED_MESSAGE_MAX = 120;
+
+/** Collapse to one trimmed line of at most BLOCKED_MESSAGE_MAX characters. */
+function blockedMessageFor(text: string): string {
+   const line = text.replace(/\s+/g, " ").trim();
+   return line.length > BLOCKED_MESSAGE_MAX ? `${line.slice(0, BLOCKED_MESSAGE_MAX - 1)}…` : line;
 }
 
 /**
@@ -2756,9 +2766,14 @@ async function runCustomPrompt<T>(ui: ExtensionUIContext, request: CustomPromptR
 
       const customResult = signal?.aborted ? null : await ui.custom<T | null>(
          customFactory,
-         buildCustomUIOptions(displayMode, (handle) => {
-            overlayHandle = handle;
-         }),
+         // `blocked` makes Pi report the "blocked" program status (OSC 7501) while the
+         // prompt is visible. Hosts that predate the option ignore the extra field.
+         {
+            ...buildCustomUIOptions(displayMode, (handle) => {
+               overlayHandle = handle;
+            }),
+            blocked: { kind: "question", message: request.blockedMessage },
+         } as Parameters<ExtensionUIContext["custom"]>[1],
       );
 
       if (signal?.aborted) return null;
@@ -2953,6 +2968,9 @@ async function executeBatch(
          signal: batch.signal,
          displayMode: settings.displayMode,
          overlayToggle: settings.shortcuts.overlayToggle,
+         blockedMessage: blockedMessageFor(
+            heading ?? (questions.length === 1 ? questions[0]!.question : `${questions.length} questions: ${questions[0]!.question}`),
+         ),
          createComponent: (tui, theme, keybindings, complete) =>
             new BatchAskComponent(questions, settings, tui, theme, keybindings, complete, heading),
          fallback: () => askBatchViaDialogs(ctx.ui, questions, settings.allowComment, batch.signal, deadline, heading),
@@ -3234,6 +3252,7 @@ export default function(pi: ExtensionAPI) {
             timeout,
             displayMode: settings.displayMode,
             overlayToggle: settings.shortcuts.overlayToggle,
+            blockedMessage: blockedMessageFor(question),
             createComponent: (tui, theme, keybindings, complete) => new AskComponent(
                question,
                normalizedContext,

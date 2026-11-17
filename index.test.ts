@@ -514,7 +514,7 @@ describe("ask_user", () => {
          },
       );
 
-      expect(capturedOptions).toBeUndefined();
+      expect(capturedOptions).toEqual({ blocked: { kind: "question", message: "Which option should we use?" } });
       expect(result.details.cancelled).toBe(true);
    });
 
@@ -608,7 +608,47 @@ describe("ask_user", () => {
          },
       );
 
-      expect(capturedOptions).toBeUndefined();
+      expect(capturedOptions).toEqual({ blocked: { kind: "question", message: "Which option should we use?" } });
+   });
+
+   test("reports blocked status to Pi for a single question", async () => {
+      const tool = await setupTool();
+      let capturedOptions: any;
+      await tool.execute(
+         "tool-call-id",
+         { question: "Which option\nshould we use?", options: ["A", "B"] },
+         undefined,
+         undefined,
+         { hasUI: true, ui: { custom: async (_factory: any, options: any) => { capturedOptions = options; return null; } } },
+      );
+      expect(capturedOptions.blocked).toEqual({ kind: "question", message: "Which option should we use?" });
+   });
+
+   test("cuts a long blocked message to one line of at most 120 characters", async () => {
+      const tool = await setupTool();
+      let capturedOptions: any;
+      await tool.execute(
+         "tool-call-id",
+         { question: "x".repeat(300), options: ["A", "B"] },
+         undefined,
+         undefined,
+         { hasUI: true, ui: { custom: async (_factory: any, options: any) => { capturedOptions = options; return null; } } },
+      );
+      expect(capturedOptions.blocked.kind).toBe("question");
+      expect(capturedOptions.blocked.message).toHaveLength(120);
+   });
+
+   test("reports blocked status to Pi for a batch with the question count", async () => {
+      const tool = await setupTool();
+      let capturedOptions: any;
+      await tool.execute(
+         "tool-call-id",
+         { questions: [{ question: "First?" }, { question: "Second?" }] },
+         undefined,
+         undefined,
+         { hasUI: true, ui: { custom: async (_factory: any, options: any) => { capturedOptions = options; return null; } } },
+      );
+      expect(capturedOptions.blocked).toEqual({ kind: "question", message: "2 questions: First?" });
    });
 
    test("normalizes PI_ASK_USER_DISPLAY_MODE before applying it", async () => {
@@ -632,7 +672,7 @@ describe("ask_user", () => {
          },
       );
 
-      expect(capturedOptions).toBeUndefined();
+      expect(capturedOptions).toEqual({ blocked: { kind: "question", message: "Which option should we use?" } });
    });
 
    test("call-level displayMode overrides PI_ASK_USER_DISPLAY_MODE env var", async () => {
@@ -3962,14 +4002,14 @@ describe("questions batch", () => {
       test("uses ask-user.json displayMode when the env var and call-level value are unset", async () => {
          stubSettingsFile(JSON.stringify({ displayMode: "inline" }));
          const capturedOptions = await executeWithCapturedOptions({});
-         expect(capturedOptions).toBeUndefined();
+         expect(capturedOptions).toEqual({ blocked: { kind: "question", message: "Which option should we use?" } });
       });
 
       test("PI_ASK_USER_DISPLAY_MODE env var overrides ask-user.json", async () => {
          stubSettingsFile(JSON.stringify({ displayMode: "overlay" }));
          stubEnv("PI_ASK_USER_DISPLAY_MODE", "inline");
          const capturedOptions = await executeWithCapturedOptions({});
-         expect(capturedOptions).toBeUndefined();
+         expect(capturedOptions).toEqual({ blocked: { kind: "question", message: "Which option should we use?" } });
       });
 
       test("call-level displayMode overrides ask-user.json", async () => {

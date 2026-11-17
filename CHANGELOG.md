@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `ask_user` passes `blocked: { kind: "question", message }` to `ctx.ui.custom()`, so Pi reports the "blocked" program status (OSC 7501) while a prompt waits, for example in Herdr app terminals. The message is the question (or batch heading), cut to one line of at most 120 characters. Older Pi versions ignore the option. The `herdr:blocked` event is unchanged.
+
 ## [0.17.0](https://github.com/edlsh/pi-ask-user/releases/tag/v0.17.0) - 2026-10-19
 
 ### Changed
